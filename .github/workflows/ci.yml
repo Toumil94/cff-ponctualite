@@ -19,6 +19,6 @@ jobs:
         run: python pipeline/make_sample.py
       - name: dbt build (modèles + tests)
         working-directory: dbt
-        run: dbt build --profiles-dir .
+        run: dbt build --profiles-dir . || { echo 'Nouvel essai'; rm -f ../data/warehouse.duckdb; dbt build --profiles-dir .; }
       - name: Export
         run: python pipeline/export.py

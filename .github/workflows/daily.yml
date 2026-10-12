@@ -72,7 +72,7 @@ jobs:
         working-directory: dbt
         run: |
           set -o pipefail
-          dbt build --profiles-dir . 2>&1 | tee ../dbt.log || {
+          dbt build --profiles-dir . 2>&1 | tee ../dbt.log || { rm -f ../data/warehouse.duckdb; dbt build --profiles-dir . 2>&1 | tee ../dbt.log; } || {
             echo "::error title=dbt::$(tail -c 3500 ../dbt.log | tr '\n' ' ' | sed 's/%/%25/g')"; exit 1; }
           echo "::notice title=dbt::$(grep -E 'Done\.|WARN' ../dbt.log | tail -c 1500 | tr '\n' ' ')"
 
