@@ -25,9 +25,17 @@ import duckdb
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = ROOT / "data" / "raw"
-CKAN = "https://opentransportdata.swiss/api/3/action/package_show?id={}"
-# Identifiants possibles du jeu de données sur le portail (il a changé de nom au fil des versions)
-PACKAGE_IDS = ["istdaten", "ist-daten-v2", "ist-daten", "actual-data"]
+# Le portail a changé d'adresse et d'identifiant au fil du temps : on essaie plusieurs
+# combinaisons, y compris le miroir officiel opendata.swiss qui référence les mêmes fichiers.
+CKAN_HOSTS = [
+    "https://opentransportdata.swiss",
+    "https://data.opentransportdata.swiss",
+    "https://ckan.opendata.swiss",
+]
+PACKAGE_IDS = [
+    "ist-daten-v2", "istdaten", "ist-daten-actual-data", "ist-daten",
+    "0edc74a3-ad4d-486e-8657-f8f3b34a0979",
+]
 
 # Colonnes indispensables. Le script s'arrête avec un message clair si l'une manque.
 REQUIRED = [
@@ -47,28 +55,37 @@ def http_json(url: str) -> dict:
         return json.load(r)
 
 
+def _files_from_package(pkg: dict) -> list[tuple[str, str]]:
+    files = []
+    for res in pkg.get("resources", []):
+        url = res.get("url") or res.get("download_url") or ""
+        name = f"{res.get('name') or ''} {url}"
+        m = DATE_IN_NAME.search(name)
+        if m and "ist" in name.lower() and url.lower().split("?")[0].endswith((".csv", ".zip")):
+            files.append((m.group(1), url))
+    return files
+
+
 def list_daily_files() -> list[tuple[str, str]]:
     """Renvoie [(date ISO, url du CSV)] trié du plus récent au plus ancien."""
-    last_error = None
-    for pid in PACKAGE_IDS:
-        try:
-            data = http_json(CKAN.format(pid))
-        except Exception as e:  # noqa: BLE001
-            last_error = e
-            continue
-        if not data.get("success"):
-            continue
-        files = []
-        for res in data["result"].get("resources", []):
-            url = res.get("url") or ""
-            name = (res.get("name") or "") + " " + url
-            m = DATE_IN_NAME.search(name)
-            if m and url.lower().endswith((".csv", ".csv.zip", ".zip")):
-                files.append((m.group(1), url))
-        if files:
-            print(f"Jeu de données trouvé : '{pid}', {len(files)} fichiers quotidiens")
-            return sorted(set(files), reverse=True)
-    sys.exit(f"Impossible de lister les fichiers Ist-Daten (dernière erreur : {last_error})")
+    attempts = []
+    for host in CKAN_HOSTS:
+        candidates = [f"{host}/api/3/action/package_show?id={pid}" for pid in PACKAGE_IDS]
+        candidates.append(f"{host}/api/3/action/package_search?q=istdaten&rows=10")
+        for url in candidates:
+            try:
+                data = http_json(url)
+            except Exception as e:  # noqa: BLE001
+                attempts.append(f"{url} -> {e}")
+                continue
+            result = data.get("result") or {}
+            packages = result.get("results") if "results" in result else [result]
+            files = [f for pkg in packages for f in _files_from_package(pkg)]
+            if files:
+                print(f"Source : {url} ({len(files)} fichiers quotidiens)")
+                return sorted(set(files), reverse=True)
+            attempts.append(f"{url} -> aucun fichier quotidien")
+    sys.exit("Impossible de lister les fichiers Ist-Daten. Essais : " + " | ".join(attempts))
 
 
 def download(url: str, day: str) -> Path:
