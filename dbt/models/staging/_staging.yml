@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: stg_stop_events
+    description: "Arrêts de trains typés et nettoyés à partir des Ist-Daten."
+    columns:
+      - name: service_date
+        tests: [not_null]
+      - name: arr_delay_s
+        description: "Retard à l'arrivée en secondes (négatif = en avance)."

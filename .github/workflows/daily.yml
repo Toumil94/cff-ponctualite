@@ -1,0 +1,81 @@
+name: Mise à jour quotidienne
+
+on:
+  schedule:
+    - cron: "17 6 * * *"   # chaque matin vers 8 h (heure suisse)
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Nombre de jours récents à récupérer"
+        default: "3"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+env:
+  KEEP_DAYS: 60          # fenêtre glissante conservée dans le data lake
+  LAKE_TAG: data-lake    # release GitHub qui sert de stockage aux fichiers Parquet
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Récupérer le data lake existant
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p data/raw
+          gh release view "$LAKE_TAG" >/dev/null 2>&1 || \
+            gh release create "$LAKE_TAG" --title "Data lake (Parquet)" \
+              --notes "Arrêts de trains quotidiens au format Parquet, alimentés par le workflow. Fenêtre glissante de $KEEP_DAYS jours."
+          gh release download "$LAKE_TAG" --pattern 'istdaten_*.parquet' --dir data/raw --clobber || true
+          ls -la data/raw | tail -5
+
+      - name: Télécharger les nouveaux jours
+        run: python pipeline/fetch.py --days "${{ github.event.inputs.days || '3' }}"
+
+      - name: Publier les nouveaux fichiers et purger les anciens
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cutoff=$(date -u -d "-$KEEP_DAYS days" +%F)
+          for f in data/raw/istdaten_*.parquet; do
+            d=$(basename "$f" .parquet | sed 's/istdaten_//')
+            if [[ "$d" < "$cutoff" ]]; then
+              rm "$f"; gh release delete-asset "$LAKE_TAG" "$(basename "$f")" -y || true
+            fi
+          done
+          existing=$(gh release view "$LAKE_TAG" --json assets --jq '.assets[].name')
+          for f in data/raw/istdaten_*.parquet; do
+            grep -qx "$(basename "$f")" <<< "$existing" || gh release upload "$LAKE_TAG" "$f"
+          done
+
+      - name: Construire et tester le modèle (dbt build)
+        working-directory: dbt
+        run: dbt build --profiles-dir .
+
+      - name: Exporter le dashboard
+        run: python pipeline/export.py
+
+      - name: Publier
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/data/dashboard.json
+          git diff --cached --quiet && echo "Rien de nouveau" && exit 0
+          git commit -m "Données du $(date -u +%F)"
+          git push

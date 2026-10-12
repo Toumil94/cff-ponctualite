@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: fct_arrivals
+    description: "Une ligne par arrivée d'un train dans une gare. Grain : service_date, trip_id, station_id, arr_planned."
+    columns:
+      - name: service_date
+        tests: [not_null]
+      - name: trip_id
+        tests: [not_null]
+      - name: station_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_station')
+                field: station_id
+      - name: arr_status
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['REAL', 'PROGNOSE', 'GESCHAETZT', 'UNBEKANNT']
+              config:
+                severity: warn
+      - name: hour
+        tests: [not_null]
+      - name: weekday
+        tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7]
+                quote: false
+
+  - name: dim_station
+    columns:
+      - name: station_id
+        tests: [unique, not_null]
+
+  - name: dim_line
+    columns:
+      - name: line
+        tests: [unique, not_null]
+
+  - name: dim_date
+    columns:
+      - name: service_date
+        tests: [unique, not_null]

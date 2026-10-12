@@ -1,0 +1,25 @@
+name: cff_ponctualite
+version: "1.0.0"
+config-version: 2
+profile: cff_ponctualite
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target"]
+
+vars:
+  # Fichiers Parquet produits par pipeline/fetch.py
+  raw_glob: "../data/raw/istdaten_*.parquet"
+  # Seuil officiel des CFF : un train est ponctuel s'il arrive avec moins de 3 minutes de retard
+  punctual_threshold_s: 180
+
+models:
+  cff_ponctualite:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
+    reports:
+      +materialized: table
