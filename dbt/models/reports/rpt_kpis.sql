@@ -5,7 +5,7 @@ select
     count(distinct service_date)                        as n_days,
     count(*)                                            as n_arrivals,
     count(*) filter (where is_measured)                 as n_measured,
-    count(distinct trip_id)                             as n_trips,
+    count(distinct (service_date, trip_id))                             as n_trips,
     count(distinct station_id)                          as n_stations,
     avg(is_punctual::int)                               as punctuality,
     avg(delay_s)                                        as avg_delay_s,

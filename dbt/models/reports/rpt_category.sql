@@ -2,7 +2,7 @@
 select
     category,
     count(*) filter (where is_measured)     as n_measured,
-    count(distinct trip_id)                 as n_trips,
+    count(distinct (service_date, trip_id))                 as n_trips,
     avg(is_punctual::int)                   as punctuality,
     avg(delay_s)                            as avg_delay_s,
     quantile_cont(delay_s, 0.9)             as p90_delay_s,

@@ -37,3 +37,6 @@ from typed
 where service_date is not null
   and trip_id is not null
   and not is_pass_through
+  -- Les fichiers incluent les arrêts à l'étranger des trains internationaux :
+  -- on ne garde que les gares suisses (code pays UIC 85).
+  and station_id like '85%'
