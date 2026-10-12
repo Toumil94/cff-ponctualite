@@ -25,9 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -46,7 +46,11 @@ jobs:
           ls -la data/raw | tail -5
 
       - name: Télécharger les nouveaux jours
-        run: python pipeline/fetch.py --days "${{ github.event.inputs.days || '3' }}"
+        run: |
+          set -o pipefail
+          python pipeline/fetch.py --days "${{ github.event.inputs.days || '3' }}" 2>&1 | tee fetch.log || {
+            echo "::error title=fetch::$(tail -c 3000 fetch.log | tr '\n' ' ' | sed 's/%/%25/g')"; exit 1; }
+          echo "::notice title=fetch::$(grep -E 'trouvé|conservés|ignoré|échec' fetch.log | tail -c 3000 | tr '\n' ' ')"
 
       - name: Publier les nouveaux fichiers et purger les anciens
         env:
@@ -66,7 +70,11 @@ jobs:
 
       - name: Construire et tester le modèle (dbt build)
         working-directory: dbt
-        run: dbt build --profiles-dir .
+        run: |
+          set -o pipefail
+          dbt build --profiles-dir . 2>&1 | tee ../dbt.log || {
+            echo "::error title=dbt::$(grep -E 'ERROR|FAIL|Error|Done' ../dbt.log | tail -c 3000 | tr '\n' ' ')"; exit 1; }
+          echo "::notice title=dbt::$(grep -E 'Done\.|WARN' ../dbt.log | tail -c 1500 | tr '\n' ' ')"
 
       - name: Exporter le dashboard
         run: python pipeline/export.py
