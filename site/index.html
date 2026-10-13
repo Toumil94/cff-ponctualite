@@ -436,7 +436,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
   document.getElementById('st-q').addEventListener('input',function(e){query=e.target.value;document.querySelectorAll('.chip').forEach(function(c){c.setAttribute('aria-pressed',c.dataset.q===query);});stations();});
   document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){var on=c.getAttribute('aria-pressed')==='true';query=on?'':c.dataset.q;document.getElementById('st-q').value=query;document.querySelectorAll('.chip').forEach(function(o){o.setAttribute('aria-pressed',!on&&o===c);});stations();});});
 
-  fetch('data/dashboard.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+  fetch('https://raw.githubusercontent.com/Toumil94/cff-ponctualite/main/site/data/dashboard.json',{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json();}).catch(function(){return fetch('data/dashboard.json').then(function(r){return r.json();});}).then(function(d){
     D=d;header();daily();categories();heatmap();distribution();propagation();stations();
   }).catch(function(){document.getElementById('kpis').innerHTML='<div class="kpi">Les données n\'ont pas pu être chargées. Rechargez la page dans un instant.</div>';});
 })();
